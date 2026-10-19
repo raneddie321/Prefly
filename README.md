@@ -35,12 +35,12 @@ cp .env.example .env.local
 **Hosted project** (recommended for production):
 
 1. Create a project at [supabase.com](https://supabase.com).
-2. Run `supabase/migrations/0001_init.sql` in the SQL editor (or `npx supabase link` + `npx supabase db push`).
+2. Run `supabase/migrations/0001_init.sql` in the SQL editor (or `npx supabase@latest link` + `npx supabase@latest db push`).
 3. *Authentication → Sign In / Providers*: enable **Anonymous sign-ins** (guest mode) and Email. Optionally enable Google.
 4. *Authentication → URL Configuration*: set the Site URL to your domain and add `https://your-domain/**` (and `http://localhost:3000/**` for local dev) to the redirect URLs.
 5. Put the project URL and anon key in `.env.local` (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`).
 
-**Local stack** (needs Docker): `npx supabase start` applies the migration and prints the local URL and anon key. `supabase/config.toml` already enables anonymous sign-ins.
+**Local stack** (needs Docker): `npx supabase@latest start` applies the migration and prints the local URL and anon key. `supabase/config.toml` already enables anonymous sign-ins.
 
 ### 3. Anthropic
 
