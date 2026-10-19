@@ -1,0 +1,126 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-jakarta), var(--font-heebo), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+
+  --color-brand-50: #f3f1ff;
+  --color-brand-100: #e9e5ff;
+  --color-brand-200: #d4ccff;
+  --color-brand-300: #b4a6ff;
+  --color-brand-400: #8f7bff;
+  --color-brand-500: #6d5dfc;
+  --color-brand-600: #5b45f0;
+  --color-brand-700: #4b35d4;
+  --color-brand-800: #3e2daa;
+  --color-brand-900: #2f2480;
+
+  --color-ink: #0d0d1a;
+  --color-ink-soft: #4a4a5e;
+  --color-ink-muted: #8a8aa0;
+  --color-line: #ececf3;
+  --color-canvas: #f8f8fc;
+
+  --shadow-card: 0 1px 2px rgb(16 16 40 / 0.04), 0 8px 24px -8px rgb(16 16 40 / 0.08);
+  --shadow-float: 0 2px 4px rgb(16 16 40 / 0.04), 0 18px 48px -12px rgb(60 40 160 / 0.18);
+
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-fade-in: fade-in 0.35s ease-out both;
+  --animate-shimmer: shimmer 1.6s linear infinite;
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0) rotate(-2deg); }
+    50% { transform: translateY(-14px) rotate(2deg); }
+  }
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes shimmer {
+    from { background-position: -200% 0; }
+    to { background-position: 200% 0; }
+  }
+}
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Soft lavender ribbons behind the main area, like the Prefly hero. */
+.aurora {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+.aurora::before,
+.aurora::after {
+  content: "";
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(40px);
+  opacity: 0.55;
+}
+.aurora::before {
+  width: 70vmax;
+  height: 30vmax;
+  top: -8vmax;
+  inset-inline-end: -18vmax;
+  background: linear-gradient(120deg, #e4ddff 0%, #f1edff 40%, #dcd4ff 100%);
+  transform: rotate(-28deg);
+}
+.aurora::after {
+  width: 60vmax;
+  height: 24vmax;
+  bottom: -10vmax;
+  inset-inline-start: -16vmax;
+  background: linear-gradient(120deg, #ece8ff 0%, #f6f4ff 60%, #e2dbff 100%);
+  transform: rotate(-24deg);
+}
+
+.text-gradient {
+  background: linear-gradient(95deg, #5b45f0 0%, #7c5cff 45%, #8b5cf6 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.shimmer-text {
+  background: linear-gradient(90deg, var(--color-ink-muted) 0%, var(--color-ink) 50%, var(--color-ink-muted) 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: var(--animate-shimmer);
+}
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #d9d9e6 transparent;
+}
+
+.code-view {
+  tab-size: 2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
