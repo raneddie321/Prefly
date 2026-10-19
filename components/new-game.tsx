@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useI18n } from "@/lib/i18n/client";
-import { ensureUser, getSupabase } from "@/lib/supabase/client";
+import { createProject } from "@/lib/data";
 import { fileToImageInput } from "@/lib/image";
 import { setPendingPrompt } from "@/lib/generation-store";
 import type { GameMode, ImageInput } from "@/lib/types";
@@ -14,7 +14,7 @@ import { ArrowUpIcon, ChevronDownIcon, GamepadIcon, ImageIcon, SpinnerIcon, Tree
 export function NewGame() {
   const { t } = useI18n();
   const router = useRouter();
-  const { configured, refreshRecent } = useAuth();
+  const { configured, aiEnabled, refreshRecent } = useAuth();
   const [prompt, setPrompt] = useState("");
   const [mode, setMode] = useState<GameMode>("auto");
   const [multiplayer, setMultiplayer] = useState(false);
@@ -45,33 +45,27 @@ export function NewGame() {
   async function submit(text = prompt, overrides?: { mode?: GameMode; multiplayer?: boolean }) {
     const value = text.trim();
     if (!value || busy) return;
-    if (!configured) {
-      setError(t("home.notConfigured"));
-      return;
-    }
     setBusy(true);
     setError(null);
+    let id: string;
     try {
-      await ensureUser();
-    } catch {
-      router.push("/login?next=/");
-      return;
-    }
-    const finalMode = overrides?.mode ?? mode;
-    const finalMultiplayer = overrides?.multiplayer ?? multiplayer;
-    const { data, error: insertError } = await getSupabase()
-      .from("projects")
-      .insert({ title: value.slice(0, 60), mode: finalMode, multiplayer: finalMultiplayer })
-      .select("id")
-      .single<{ id: string }>();
-    if (insertError || !data) {
-      setError(insertError?.message ?? t("common.error"));
+      id = await createProject({
+        title: value.slice(0, 60),
+        mode: overrides?.mode ?? mode,
+        multiplayer: overrides?.multiplayer ?? multiplayer,
+      });
+    } catch (err) {
+      if (configured && err instanceof Error && /guest session/i.test(err.message)) {
+        router.push("/login?next=/");
+        return;
+      }
+      setError(err instanceof Error ? err.message : t("common.error"));
       setBusy(false);
       return;
     }
-    setPendingPrompt(data.id, { prompt: value, image: image ? { mediaType: image.mediaType, data: image.data } : undefined });
+    setPendingPrompt(id, { prompt: value, image: image ? { mediaType: image.mediaType, data: image.data } : undefined });
     void refreshRecent();
-    router.push(`/project/${data.id}`);
+    router.push(`/project/${id}`);
   }
 
   async function onFile(file: File | undefined) {
@@ -101,6 +95,7 @@ export function NewGame() {
           <span className="text-gradient block pb-1">{t("home.title2")}</span>
         </h1>
         <p className="mt-5 max-w-xl text-base text-ink-soft sm:text-lg">{t("home.subtitle")}</p>
+        {!aiEnabled && <p className="mt-5 max-w-xl rounded-2xl border border-brand-100 bg-white/80 px-4 py-2.5 text-sm text-ink-soft">{t("home.demoMode")}</p>}
 
         <form
           className="mt-12 w-full rounded-[22px] border border-line bg-white p-3 text-start shadow-float transition focus-within:border-brand-200 sm:p-4"

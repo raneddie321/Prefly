@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useI18n } from "@/lib/i18n/client";
 import { getSupabase } from "@/lib/supabase/client";
+import { addVersion, isLocalMode, updateProject } from "@/lib/data";
 import { clearGeneration, startGeneration, stopGeneration, takePendingPrompt, useGeneration, type StartOptions } from "@/lib/generation-store";
 import { streamingCode } from "@/lib/ai/response";
 import type { AssetMap, ImageInput, Project, ProjectMessage, RuntimeError } from "@/lib/types";
@@ -141,11 +142,12 @@ export function Studio({ initialProject, initialMessages }: { initialProject: St
     setEditingTitle(false);
     if (!value || value === project.title) return;
     setProject((p) => ({ ...p, title: value }));
-    await getSupabase().from("projects").update({ title: value }).eq("id", project.id);
+    await updateProject(project.id, { title: value });
     void refreshRecent();
   }
 
   async function publish(value: boolean) {
+    if (isLocalMode()) return;
     const supabase = getSupabase();
     let author: string | null = null;
     if (value) {
@@ -161,9 +163,8 @@ export function Studio({ initialProject, initialMessages }: { initialProject: St
   }
 
   async function restore(version: { html: string; assets: AssetMap; summary: string }) {
-    const supabase = getSupabase();
-    await supabase.from("projects").update({ html: version.html, assets: version.assets }).eq("id", project.id);
-    await supabase.from("project_versions").insert({ project_id: project.id, html: version.html, assets: version.assets, summary: `↩ ${version.summary}`.slice(0, 300) });
+    await updateProject(project.id, { html: version.html, assets: version.assets });
+    await addVersion(project.id, { html: version.html, assets: version.assets, summary: `↩ ${version.summary}`.slice(0, 300) });
     setProject((p) => ({ ...p, html: version.html, assets: version.assets }));
     setRuntimeErrors([]);
     setPlaying(true);

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Heebo, Plus_Jakarta_Sans } from "next/font/google";
 import { AuthProvider } from "@/components/auth-provider";
+import { isAnthropicConfigured } from "@/lib/ai/client";
 import { I18nProvider } from "@/lib/i18n/client";
 import { getLocale } from "@/lib/i18n/server";
 import { dirOf } from "@/lib/i18n/locale";
@@ -27,7 +28,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang={locale} dir={dirOf(locale)} className={`${jakarta.variable} ${heebo.variable}`}>
       <body className="font-sans">
         <I18nProvider locale={locale}>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider aiEnabled={isAnthropicConfigured()}>{children}</AuthProvider>
         </I18nProvider>
       </body>
     </html>

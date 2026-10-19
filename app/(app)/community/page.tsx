@@ -6,6 +6,7 @@ import { getT } from "@/lib/i18n/server";
 import { GameCard } from "@/components/game-card";
 import { PlayIcon, SearchIcon, UsersIcon } from "@/components/icons";
 import { PROJECT_SUMMARY_COLUMNS, type ProjectSummary } from "@/lib/types";
+import { TEMPLATES } from "@/lib/templates";
 
 export const metadata: Metadata = { title: "Community" };
 
@@ -25,6 +26,22 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
     games = (data ?? []) as ProjectSummary[];
   }
   const nf = new Intl.NumberFormat(locale, { notation: "compact" });
+  // Built-in demo games are always listed, so Community is never empty.
+  const demos: ProjectSummary[] = Object.values(TEMPLATES)
+    .filter((d) => !query || d.title[locale].toLowerCase().includes(query.toLowerCase()))
+    .map((d) => ({
+      id: `demo-${d.id}`,
+      title: d.title[locale],
+      description: d.tagline[locale],
+      emoji: d.emoji,
+      palette: d.palette,
+      is_public: true,
+      play_count: 0,
+      updated_at: "",
+      author_name: "Prefly",
+      multiplayer: false,
+    }));
+  games = [...games, ...demos];
 
   return (
     <div className="mx-auto max-w-6xl px-4 pb-16 pt-20 sm:px-8 lg:pt-12">
@@ -68,7 +85,7 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
               meta={
                 <span className="flex items-center gap-3">
                   <span className="flex items-center gap-1">
-                    <PlayIcon size={11} /> {t("community.plays", { n: nf.format(g.play_count) })}
+                    <PlayIcon size={11} /> {g.id.startsWith("demo-") ? "Demo" : t("community.plays", { n: nf.format(g.play_count) })}
                   </span>
                   {g.author_name && <span className="truncate">{t("community.by", { name: g.author_name })}</span>}
                   {g.multiplayer && <UsersIcon size={13} />}

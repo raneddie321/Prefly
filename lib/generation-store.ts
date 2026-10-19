@@ -1,6 +1,8 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { isLocalMode } from "@/lib/data";
+import { localStore } from "@/lib/local-store";
 import type { AssetMap, GamePlan, GenerationEvent, ImageInput, Locale, RuntimeError, StageId } from "@/lib/types";
 
 /**
@@ -129,9 +131,47 @@ export function startGeneration(options: StartOptions): void {
   void run(options, controller.signal);
 }
 
+/** Without a database the browser owns the project: send its state along and save the result locally. */
+function localPayload(options: StartOptions) {
+  if (!isLocalMode()) return undefined;
+  const p = localStore.get(options.projectId);
+  if (!p) return undefined;
+  const history = p.messages
+    .filter((m) => m.meta?.kind !== "error")
+    .slice(-12)
+    .map((m) => ({ role: m.role, content: m.content.slice(0, 2000) }));
+  const fix = Boolean(options.runtimeErrors?.length);
+  localStore.addMessage(options.projectId, {
+    role: "user",
+    content: fix ? `Fix ${options.runtimeErrors!.length} error(s) found while play-testing` : options.prompt,
+    meta: fix ? { kind: "fix" } : options.image ? { image: true } : {},
+  });
+  return { html: p.html, plan: p.plan, assets: p.assets, mode: p.mode, multiplayer: p.multiplayer, history };
+}
+
+function saveLocalResult(projectId: string) {
+  const s = states.get(projectId);
+  if (!s || !isLocalMode()) return;
+  if (s.status === "done" && s.result) {
+    const r = s.result;
+    const create = s.kind === "create" && s.plan;
+    localStore.update(projectId, {
+      html: r.html,
+      assets: r.assets,
+      ...(create ? { title: r.title, emoji: r.emoji, palette: r.palette, plan: s.plan, description: s.plan!.tagline, multiplayer: s.plan!.multiplayer } : {}),
+    });
+    localStore.addVersion(projectId, { html: r.html, assets: r.assets, summary: r.message.slice(0, 300) || s.kind });
+    const agents = [...new Set(s.stages.filter((st) => st.status === "done" && st.stage !== "save").map((st) => st.stage))];
+    localStore.addMessage(projectId, { role: "assistant", content: r.message || "Done.", meta: { kind: s.kind === "fix" ? "fix" : undefined, agents } });
+  } else if (s.status === "error" && s.errorCode !== "aborted" && s.error) {
+    localStore.addMessage(projectId, { role: "assistant", content: s.error, meta: { kind: "error" } });
+  }
+}
+
 async function run(options: StartOptions, signal: AbortSignal) {
   const { projectId } = options;
   try {
+    const local = localPayload(options);
     const response = await fetch("/api/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -141,6 +181,7 @@ async function run(options: StartOptions, signal: AbortSignal) {
         locale: options.locale,
         image: options.image,
         runtimeErrors: options.runtimeErrors,
+        local,
       }),
       signal,
     });
@@ -197,6 +238,7 @@ async function run(options: StartOptions, signal: AbortSignal) {
     }));
   } finally {
     controllers.delete(projectId);
+    saveLocalResult(projectId);
   }
 }
 

@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getT } from "@/lib/i18n/server";
 import { Studio, type StudioProject } from "@/components/studio/studio";
+import { LocalStudio } from "@/components/local-pages";
 import type { ProjectMessage } from "@/lib/types";
 
 export const metadata: Metadata = { title: "Studio" };
@@ -11,7 +12,7 @@ export const metadata: Metadata = { title: "Studio" };
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { t } = await getT();
-  if (!isSupabaseConfigured()) return <Notice text={t("home.notConfigured")} />;
+  if (!isSupabaseConfigured()) return <LocalStudio id={id} />;
 
   const supabase = await createClient();
   const {

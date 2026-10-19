@@ -20,6 +20,15 @@ Built with **Next.js 16 (App Router) · TypeScript · Tailwind CSS 4 · Supabase
 - **English and Hebrew** with full RTL layout; games are written in the player's language.
 - **Daily quota** per user (guest / registered) enforced in the database.
 
+## Zero-config demo mode
+
+Prefly runs with **no environment variables at all**:
+
+- **Without Supabase**, games, chat history and versions are stored in the browser's localStorage (per device). Publishing and online multiplayer are unavailable; downloading works.
+- **Without `ANTHROPIC_API_KEY`**, "create a game" picks a playable built-in game that fits the prompt (2D platformer, space shooter or 3D racer), and chat edits explain that AI needs a key. Community always lists the built-in demos.
+
+Add the keys below whenever you're ready — no code changes needed. Note: with an Anthropic key but no Supabase, the generation endpoint has no login or quota, so anyone who finds the site can spend your API credits.
+
 ## Getting started
 
 ### 1. Install

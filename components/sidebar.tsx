@@ -96,6 +96,7 @@ export function Sidebar() {
           </span>
           {t("nav.settings")}
         </Link>
+        {!configured && <p className="px-3 text-xs text-ink-muted">{t("nav.thisDevice")}</p>}
         {configured && (
           <Link
             href={user ? "/settings" : "/login"}

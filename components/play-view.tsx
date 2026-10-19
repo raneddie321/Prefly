@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useI18n } from "@/lib/i18n/client";
 import { getSupabase } from "@/lib/supabase/client";
-import { remixProject } from "@/lib/remix";
+import { isLocalMode, remixProject } from "@/lib/data";
 import { shareOrCopy } from "@/lib/share";
 import type { Project } from "@/lib/types";
 import { GameCover, LogoMark } from "./brand";
@@ -29,7 +29,7 @@ export function PlayView({ game, room, isOwner }: { game: PlayGame; room: string
   }, [room]);
 
   useEffect(() => {
-    if (!playing || counted.current || !game.is_public) return;
+    if (!playing || counted.current || !game.is_public || isLocalMode() || game.id.startsWith("demo-")) return;
     counted.current = true;
     const key = `prefly:played:${game.id}`;
     try {
@@ -54,11 +54,11 @@ export function PlayView({ game, room, isOwner }: { game: PlayGame; room: string
   async function remix() {
     setRemixing(true);
     try {
-      const id = await remixProject(game.id, "(remix)");
+      const id = await remixProject(game.id, "(remix)", locale);
       router.push(`/project/${id}`);
     } catch {
       setRemixing(false);
-      router.push(`/login?next=/play/${game.id}`);
+      if (!isLocalMode()) router.push(`/login?next=/play/${game.id}`);
     }
   }
 
@@ -88,7 +88,7 @@ export function PlayView({ game, room, isOwner }: { game: PlayGame; room: string
         <button onClick={fullscreen} className="rounded-xl p-2 text-ink-soft hover:bg-black/5" aria-label={t("studio.fullscreen")}>
           <MaximizeIcon size={18} />
         </button>
-        {game.is_public && (
+        {game.is_public && !isLocalMode() && (
           <button onClick={() => share()} className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm text-ink-soft hover:bg-black/5">
             <ShareIcon size={17} /> <span className="hidden sm:inline">{t("play.share")}</span>
           </button>

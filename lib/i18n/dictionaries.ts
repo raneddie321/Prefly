@@ -92,6 +92,9 @@ const en = {
   "share.openPlayer": "Open player",
   "share.invite": "Copy multiplayer invite",
   "share.makePublic": "Publish game",
+  "share.localOnly": "This site runs without a database, so games are saved only in this browser and can't be published. Use Download to share the game file instead.",
+  "home.demoMode": "Demo mode: games come from Prefly's built-in library. Add an ANTHROPIC_API_KEY to the server to generate any game with AI.",
+  "nav.thisDevice": "Saved on this device",
 
   "download.title": "Download your game",
   "download.html": "Single HTML file",
@@ -267,6 +270,9 @@ const he: Dictionary = {
   "share.openPlayer": "פתיחת הנגן",
   "share.invite": "העתקת הזמנה למשחק משותף",
   "share.makePublic": "פרסום המשחק",
+  "share.localOnly": "האתר פועל בלי מסד נתונים, ולכן המשחקים נשמרים רק בדפדפן הזה ואי אפשר לפרסם אותם. אפשר לשתף את קובץ המשחק דרך „הורדה”.",
+  "home.demoMode": "מצב הדגמה: המשחקים מגיעים מספריית המשחקים המובנית של Prefly. הוסיפו ANTHROPIC_API_KEY לשרת כדי ש-AI ייצור כל משחק שתרצו.",
+  "nav.thisDevice": "נשמר במכשיר הזה",
 
   "download.title": "הורדת המשחק",
   "download.html": "קובץ HTML יחיד",

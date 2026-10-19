@@ -4,32 +4,25 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useI18n, useRelativeTime } from "@/lib/i18n/client";
-import { getSupabase } from "@/lib/supabase/client";
-import { remixProject } from "@/lib/remix";
-import { PROJECT_SUMMARY_COLUMNS, type ProjectSummary } from "@/lib/types";
+import { deleteProject, isLocalMode, listProjects, remixProject } from "@/lib/data";
+import type { ProjectSummary } from "@/lib/types";
 import { useAuth } from "./auth-provider";
 import { GameCard } from "./game-card";
 import { CopyIcon, DotsIcon, GlobeIcon, LockIcon, PlusIcon, SpinnerIcon, TrashIcon } from "./icons";
 
 export function MyGames() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const relative = useRelativeTime();
   const router = useRouter();
   const { user, loading: authLoading, refreshRecent } = useAuth();
   const [games, setGames] = useState<ProjectSummary[] | null>(null);
 
   const load = useCallback(async () => {
-    if (!user) {
+    if (!user && !isLocalMode()) {
       setGames([]);
       return;
     }
-    const { data } = await getSupabase()
-      .from("projects")
-      .select(PROJECT_SUMMARY_COLUMNS)
-      .eq("user_id", user.id)
-      .order("updated_at", { ascending: false })
-      .limit(200);
-    setGames((data ?? []) as ProjectSummary[]);
+    setGames(await listProjects());
   }, [user]);
 
   useEffect(() => {
@@ -38,13 +31,13 @@ export function MyGames() {
 
   async function remove(game: ProjectSummary) {
     if (!window.confirm(t("games.confirmDelete", { title: game.title }))) return;
-    await getSupabase().from("projects").delete().eq("id", game.id);
+    await deleteProject(game.id);
     setGames((g) => g?.filter((x) => x.id !== game.id) ?? null);
     void refreshRecent();
   }
 
   async function duplicate(game: ProjectSummary) {
-    const id = await remixProject(game.id, "(2)");
+    const id = await remixProject(game.id, "(2)", locale);
     void refreshRecent();
     router.push(`/project/${id}`);
   }

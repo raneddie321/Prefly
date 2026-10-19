@@ -4,10 +4,12 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { User } from "@supabase/supabase-js";
 import { getSupabase } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { PROJECT_SUMMARY_COLUMNS, type ProjectSummary } from "@/lib/types";
+import { listProjects } from "@/lib/data";
+import type { ProjectSummary } from "@/lib/types";
 
 interface AuthValue {
   configured: boolean;
+  aiEnabled: boolean;
   loading: boolean;
   user: User | null;
   isGuest: boolean;
@@ -17,28 +19,15 @@ interface AuthValue {
 
 const AuthContext = createContext<AuthValue | null>(null);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children, aiEnabled }: { children: React.ReactNode; aiEnabled: boolean }) {
   const configured = isSupabaseConfigured();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(configured);
   const [recent, setRecent] = useState<ProjectSummary[]>([]);
 
   const refreshRecent = useCallback(async () => {
-    if (!configured) return;
-    const supabase = getSupabase();
-    const { data: auth } = await supabase.auth.getUser();
-    if (!auth.user) {
-      setRecent([]);
-      return;
-    }
-    const { data } = await supabase
-      .from("projects")
-      .select(PROJECT_SUMMARY_COLUMNS)
-      .eq("user_id", auth.user.id)
-      .order("updated_at", { ascending: false })
-      .limit(8);
-    setRecent((data ?? []) as ProjectSummary[]);
-  }, [configured]);
+    setRecent(await listProjects(8));
+  }, []);
 
   useEffect(() => {
     if (!configured) return;
@@ -59,8 +48,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user?.id, refreshRecent]);
 
   const value = useMemo<AuthValue>(
-    () => ({ configured, loading, user, isGuest: Boolean(user?.is_anonymous), recent, refreshRecent }),
-    [configured, loading, user, recent, refreshRecent],
+    () => ({ configured, aiEnabled, loading, user, isGuest: Boolean(user?.is_anonymous), recent, refreshRecent }),
+    [configured, aiEnabled, loading, user, recent, refreshRecent],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

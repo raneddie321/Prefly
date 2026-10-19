@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useI18n, useRelativeTime } from "@/lib/i18n/client";
-import { getSupabase } from "@/lib/supabase/client";
+import { getVersion, isLocalMode, listVersions } from "@/lib/data";
 import { copyText, playUrl } from "@/lib/share";
 import { downloadHtml, downloadZip, type ExportableGame } from "@/lib/export";
 import type { AssetMap, ProjectVersion } from "@/lib/types";
@@ -57,7 +57,9 @@ export function ShareDialog({
         </div>
       </div>
 
-      {isPublic ? (
+      {isLocalMode() ? (
+        <p className="mt-4 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900">{t("share.localOnly")}</p>
+      ) : isPublic ? (
         <div className="mt-4 flex flex-col gap-2.5">
           <div className="flex items-center gap-2 rounded-xl border border-line px-3 py-2.5" dir="ltr">
             <LinkIcon size={16} className="shrink-0 text-ink-muted" />
@@ -158,15 +160,9 @@ export function VersionsDialog({
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    getSupabase()
-      .from("project_versions")
-      .select("id,project_id,summary,created_at")
-      .eq("project_id", projectId)
-      .order("id", { ascending: false })
-      .limit(50)
-      .then(({ data }) => {
-        if (!cancelled) setVersions((data ?? []) as ProjectVersion[]);
-      });
+    listVersions(projectId).then((list) => {
+      if (!cancelled) setVersions(list);
+    });
     return () => {
       cancelled = true;
     };
@@ -175,7 +171,7 @@ export function VersionsDialog({
   async function restore(id: number) {
     if (!window.confirm(t("versions.confirm"))) return;
     setBusy(id);
-    const { data } = await getSupabase().from("project_versions").select("html,assets,summary").eq("id", id).single<{ html: string; assets: AssetMap; summary: string }>();
+    const data = await getVersion(projectId, id);
     if (data) await onRestore(data);
     setBusy(null);
     onClose();
