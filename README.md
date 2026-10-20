@@ -76,7 +76,7 @@ npm run build && npm start
 
 ## Deploying
 
-Deploy this repository to any Node host. On Vercel, add the environment variables. A full generation (design → art → code → QA) can take several minutes, so `/api/generate` sets `maxDuration = 800` — that needs a plan that allows it (Vercel Pro with Fluid compute). On a plan with a lower limit, lower `maxDuration` in `app/api/generate/route.ts` and consider `PREFLY_CODE_EFFORT=low`. If the browser disconnects, the server keeps going and still saves the game.
+Deploy this repository to any Node host. On Vercel, add the environment variables. A full generation (design → art → code → QA) can take several minutes, so `/api/generate` sets `maxDuration = 300` (the Vercel Hobby maximum). On Vercel Pro raise it to 800 in `app/api/generate/route.ts`; on Hobby consider `PREFLY_CODE_EFFORT=low` so AI generations finish in time. If the browser disconnects, the server keeps going and still saves the game.
 
 Daily generation limits live in the `consume_generation` SQL function (20/day for guests, 200/day for registered users) — edit and re-run it to change them.
 

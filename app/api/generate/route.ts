@@ -8,7 +8,8 @@ import { buildTemplateGame, demoEditMessage, demoMessage, pickTemplate } from "@
 import type { AssetMap, GameMode, GamePlan, GenerationEvent, Locale, Project, ProjectMessage, StageId } from "@/lib/types";
 
 export const runtime = "nodejs";
-export const maxDuration = 800;
+// Vercel Hobby allows up to 300s; raise to 800 on Pro for long AI generations.
+export const maxDuration = 300;
 
 const Body = z.object({
   projectId: z.string().min(1).max(64),
