@@ -21,7 +21,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   const { data: project } = /^[0-9a-f-]{36}$/i.test(id)
     ? await supabase
         .from("projects")
-        .select("id,user_id,title,description,emoji,palette,html,assets,is_public,multiplayer,plan")
+        .select("id,user_id,title,description,emoji,palette,html,files,assets,is_public,multiplayer,plan")
         .eq("id", id)
         .maybeSingle<StudioProject & { user_id: string }>()
     : { data: null };

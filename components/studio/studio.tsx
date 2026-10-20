@@ -18,7 +18,7 @@ import type { TestStatus } from "./agent-progress";
 
 export type StudioProject = Pick<
   Project,
-  "id" | "title" | "description" | "emoji" | "palette" | "html" | "assets" | "is_public" | "multiplayer" | "plan"
+  "id" | "title" | "description" | "emoji" | "palette" | "html" | "files" | "assets" | "is_public" | "multiplayer" | "plan"
 >;
 
 const MAX_AUTO_FIX_ROUNDS = 2;
@@ -30,7 +30,7 @@ function toChat(m: Pick<ProjectMessage, "id" | "role" | "content" | "meta">): Ch
 
 export function Studio({ initialProject, initialMessages }: { initialProject: StudioProject; initialMessages: ProjectMessage[] }) {
   const { t, locale } = useI18n();
-  const { refreshRecent } = useAuth();
+  const { refreshRecent, refreshUsage, model, aiEnabled, plan: userPlan } = useAuth();
   const [project, setProject] = useState(initialProject);
   const [messages, setMessages] = useState<ChatMessage[]>(() => initialMessages.map(toChat));
   const gen = useGeneration(project.id);
@@ -51,13 +51,13 @@ export function Studio({ initialProject, initialMessages }: { initialProject: St
 
   const run = useCallback(
     (options: Omit<StartOptions, "projectId" | "locale">) => {
-      const full: StartOptions = { ...options, projectId: project.id, locale };
+      const full: StartOptions = { model, ...options, projectId: project.id, locale };
       lastRequest.current = full;
       setTest({ status: "idle" });
       setTestRun(null);
       startGeneration(full);
     },
-    [project.id, locale],
+    [project.id, locale, model],
   );
 
   const send = useCallback(
@@ -86,7 +86,7 @@ export function Studio({ initialProject, initialMessages }: { initialProject: St
     const pending = takePendingPrompt(project.id);
     if (pending && !initialProject.html && !gen) {
       setMessages((m) => (m.length ? m : [{ key: "pending", role: "user", content: pending.prompt, image: Boolean(pending.image) }]));
-      run({ prompt: pending.prompt, image: pending.image, kind: "create" });
+      run({ prompt: pending.prompt, image: pending.image, kind: "create", ...(pending.model ? { model: pending.model } : {}) });
     } else if (gen && gen.status !== "running") {
       // A generation finished while the user was elsewhere; the server data is already fresh.
       handledGen.current = gen.id;
@@ -100,7 +100,16 @@ export function Studio({ initialProject, initialMessages }: { initialProject: St
     handledGen.current = gen.id;
     if (gen.status === "done" && gen.result) {
       const r = gen.result;
-      setProject((p) => ({ ...p, html: r.html, assets: r.assets, title: r.title, emoji: r.emoji, palette: r.palette, plan: gen.plan ?? p.plan }));
+      setProject((p) => ({
+        ...p,
+        html: r.html,
+        files: r.files,
+        assets: r.assets,
+        title: r.title || p.title,
+        emoji: r.emoji || p.emoji,
+        palette: r.palette.length ? r.palette : p.palette,
+        plan: gen.plan ?? p.plan,
+      }));
       const agents = [...new Set(gen.stages.filter((st) => st.status === "done" && st.stage !== "save").map((st) => st.stage))];
       setMessages((m) => [...m, { key: `gen-${gen.id}`, role: "assistant", content: r.message || "✓", kind: gen.kind === "fix" ? "fix" : undefined, agents }]);
       if (typeof r.remaining === "number") setRemaining(r.remaining);
@@ -112,8 +121,11 @@ export function Studio({ initialProject, initialMessages }: { initialProject: St
       setTestRun({ key: gen.id, html: r.html, assets: r.assets });
       clearGeneration(project.id);
       void refreshRecent();
+      void refreshUsage();
+    } else if (gen.status === "error") {
+      void refreshUsage();
     }
-  }, [gen, project.id, refreshRecent]);
+  }, [gen, project.id, refreshRecent, refreshUsage]);
 
   const onTestResult = useCallback(
     (errors: RuntimeError[]) => {
@@ -122,7 +134,7 @@ export function Studio({ initialProject, initialMessages }: { initialProject: St
         setTest({ status: "passed" });
         return;
       }
-      const auto = autoFixRounds.current < MAX_AUTO_FIX_ROUNDS;
+      const auto = aiEnabled && autoFixRounds.current < MAX_AUTO_FIX_ROUNDS;
       setTest({ status: "failed", count: errors.length, fixing: auto });
       setRuntimeErrors(errors);
       if (auto) {
@@ -130,7 +142,7 @@ export function Studio({ initialProject, initialMessages }: { initialProject: St
         fix(errors, true);
       }
     },
-    [fix],
+    [fix, aiEnabled],
   );
 
   const onRuntimeError = useCallback((e: RuntimeError) => {
@@ -162,20 +174,22 @@ export function Studio({ initialProject, initialMessages }: { initialProject: St
     if (!error) setProject((p) => ({ ...p, is_public: value }));
   }
 
-  async function restore(version: { html: string; assets: AssetMap; summary: string }) {
-    await updateProject(project.id, { html: version.html, assets: version.assets });
-    await addVersion(project.id, { html: version.html, assets: version.assets, summary: `↩ ${version.summary}`.slice(0, 300) });
-    setProject((p) => ({ ...p, html: version.html, assets: version.assets }));
+  async function restore(version: { html: string; files?: Record<string, string> | null; assets: AssetMap; summary: string }) {
+    const files = version.files ?? null;
+    await updateProject(project.id, { html: version.html, files, assets: version.assets });
+    await addVersion(project.id, { html: version.html, files, assets: version.assets, summary: `↩ ${version.summary}`.slice(0, 300) });
+    setProject((p) => ({ ...p, html: version.html, files, assets: version.assets }));
     setRuntimeErrors([]);
     setPlaying(true);
     setPlayKey((k) => k + 1);
   }
 
   const retry =
-    gen?.status === "error" && lastRequest.current && gen.errorCode !== "quota"
+    gen?.status === "error" && lastRequest.current && gen.errorCode !== "quota" && gen.errorCode !== "plan"
       ? () => {
           const last = lastRequest.current!;
-          startGeneration(last);
+          // A new game whose design already exists continues from the code step.
+          startGeneration(last.kind === "create" ? { ...last, existingPlan: gen.plan ?? project.plan } : last);
         }
       : null;
 
@@ -187,6 +201,7 @@ export function Studio({ initialProject, initialMessages }: { initialProject: St
     palette: project.palette,
     description: project.description,
     html: project.html ?? "",
+    files: project.files ?? null,
     assets: project.assets,
   };
 

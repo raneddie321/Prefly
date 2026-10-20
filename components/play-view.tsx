@@ -6,7 +6,9 @@ import { useRouter } from "next/navigation";
 import { useI18n } from "@/lib/i18n/client";
 import { getSupabase } from "@/lib/supabase/client";
 import { isLocalMode, remixProject } from "@/lib/data";
-import { shareOrCopy } from "@/lib/share";
+import { copyText, shareOrCopy } from "@/lib/share";
+import { Modal } from "./modal";
+import { ShareTargets } from "./studio/dialogs";
 import type { Project } from "@/lib/types";
 import { GameCover, LogoMark } from "./brand";
 import { GameFrame } from "./game/game-frame";
@@ -20,6 +22,7 @@ export function PlayView({ game, room, isOwner }: { game: PlayGame; room: string
   const [playing, setPlaying] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [remixing, setRemixing] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const stageRef = useRef<HTMLDivElement>(null);
   const counted = useRef(false);
 
@@ -89,7 +92,7 @@ export function PlayView({ game, room, isOwner }: { game: PlayGame; room: string
           <MaximizeIcon size={18} />
         </button>
         {game.is_public && !isLocalMode() && (
-          <button onClick={() => share()} className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm text-ink-soft hover:bg-black/5">
+          <button onClick={() => setShareOpen(true)} className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm text-ink-soft hover:bg-black/5">
             <ShareIcon size={17} /> <span className="hidden sm:inline">{t("play.share")}</span>
           </button>
         )}
@@ -131,6 +134,17 @@ export function PlayView({ game, room, isOwner }: { game: PlayGame; room: string
             </div>
           </button>
         )}
+        <Modal open={shareOpen} onClose={() => setShareOpen(false)} title={t("share.title")}>
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-2 rounded-xl border border-line px-3 py-2.5" dir="ltr">
+              <span className="min-w-0 flex-1 truncate text-sm">{typeof window === "undefined" ? "" : window.location.href.split("?")[0]}</span>
+              <button onClick={() => copyText(window.location.href.split("?")[0]).then(() => flash(t("studio.copied")))} className="rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-semibold text-white">
+                {t("share.copyLink")}
+              </button>
+            </div>
+            <ShareTargets url={typeof window === "undefined" ? "" : window.location.href.split("?")[0]} text={`${game.emoji} ${game.title}`} />
+          </div>
+        </Modal>
         {toast && (
           <div className="pointer-events-none absolute inset-x-0 bottom-6 flex justify-center">
             <span className="rounded-full bg-black/75 px-4 py-2 text-sm text-white">{toast}</span>

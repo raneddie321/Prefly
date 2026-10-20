@@ -4,10 +4,13 @@ import { useEffect, useState } from "react";
 import { useI18n, useRelativeTime } from "@/lib/i18n/client";
 import { getVersion, isLocalMode, listVersions } from "@/lib/data";
 import { copyText, playUrl } from "@/lib/share";
-import { downloadHtml, downloadZip, type ExportableGame } from "@/lib/export";
+import { downloadHtml, downloadSource, downloadZip, type ExportableGame } from "@/lib/export";
+import { PLAN_LIMITS } from "@/lib/plans";
+import { useRouter } from "next/navigation";
+import { useAuth } from "../auth-provider";
 import type { AssetMap, ProjectVersion } from "@/lib/types";
 import { Modal } from "../modal";
-import { CheckIcon, CopyIcon, DownloadIcon, GlobeIcon, LinkIcon, LockIcon, MonitorIcon, PhoneIcon, PlayIcon, SpinnerIcon, UsersIcon } from "../icons";
+import { CodeIcon, CheckIcon, CopyIcon, DownloadIcon, GlobeIcon, LinkIcon, LockIcon, MonitorIcon, PhoneIcon, PlayIcon, SpinnerIcon, UsersIcon } from "../icons";
 
 export function ShareDialog({
   open,
@@ -75,6 +78,7 @@ export function ShareDialog({
               {t("share.openPlayer")}
             </a>
           </div>
+          <ShareTargets url={url} />
           {multiplayer && (
             <p className="flex items-center gap-2 text-xs text-ink-soft">
               <UsersIcon size={14} /> {t("share.invite")}: {t("home.multiplayerHint")}
@@ -100,29 +104,33 @@ export function ShareDialog({
 
 export function DownloadDialog({ open, onClose, game }: { open: boolean; onClose: () => void; game: ExportableGame }) {
   const { t, locale } = useI18n();
+  const { plan } = useAuth();
+  const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
 
-  async function run(kind: "html" | "zip") {
+  async function run(kind: "html" | "zip" | "source") {
     setBusy(kind);
     try {
       if (kind === "html") downloadHtml(game, locale);
-      else await downloadZip(game, locale);
+      else if (kind === "zip") await downloadZip(game, locale);
+      else await downloadSource(game);
     } finally {
       setBusy(null);
     }
   }
 
   const options = [
-    { kind: "html" as const, icon: MonitorIcon, title: t("download.html"), desc: t("download.htmlDesc") },
-    { kind: "zip" as const, icon: PhoneIcon, title: t("download.zip"), desc: t("download.zipDesc") },
+    { kind: "html" as const, icon: MonitorIcon, title: t("download.html"), desc: t("download.htmlDesc"), allowed: true, pro: false },
+    { kind: "zip" as const, icon: PhoneIcon, title: t("download.zip"), desc: t("download.zipDesc"), allowed: PLAN_LIMITS[plan].appDownload, pro: false },
+    { kind: "source" as const, icon: CodeIcon, title: t("download.source"), desc: t("download.sourceDesc"), allowed: PLAN_LIMITS[plan].sourceDownload, pro: true },
   ];
   return (
     <Modal open={open} onClose={onClose} title={t("download.title")}>
       <div className="flex flex-col gap-3">
-        {options.map(({ kind, icon: Icon, title, desc }) => (
+        {options.map(({ kind, icon: Icon, title, desc, allowed, pro }) => (
           <button
             key={kind}
-            onClick={() => run(kind)}
+            onClick={() => (allowed ? run(kind) : router.push(pro ? "/pricing" : "/login"))}
             disabled={busy !== null}
             className="flex items-start gap-4 rounded-2xl border border-line p-4 text-start transition hover:border-brand-200 hover:bg-brand-50/40"
           >
@@ -130,10 +138,13 @@ export function DownloadDialog({ open, onClose, game }: { open: boolean; onClose
               <Icon size={22} />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block font-medium">{title}</span>
-              <span className="mt-0.5 block text-sm text-ink-soft">{desc}</span>
+              <span className="flex items-center gap-2 font-medium">
+                {title}
+                {pro && <span className="rounded-full bg-gradient-to-r from-brand-500 to-fuchsia-500 px-1.5 py-0.5 text-[10px] font-bold text-white">PRO</span>}
+              </span>
+              <span className="mt-0.5 block text-sm text-ink-soft">{allowed ? desc : pro ? t("download.proOnly") : t("download.accountOnly")}</span>
             </span>
-            <span className="self-center text-ink-muted">{busy === kind ? <SpinnerIcon size={18} /> : <DownloadIcon size={18} />}</span>
+            <span className="self-center text-ink-muted">{busy === kind ? <SpinnerIcon size={18} /> : allowed ? <DownloadIcon size={18} /> : <LockIcon size={16} />}</span>
           </button>
         ))}
       </div>
@@ -150,7 +161,7 @@ export function VersionsDialog({
   open: boolean;
   onClose: () => void;
   projectId: string;
-  onRestore: (version: { html: string; assets: AssetMap; summary: string }) => Promise<void>;
+  onRestore: (version: { html: string; files?: Record<string, string> | null; assets: AssetMap; summary: string }) => Promise<void>;
 }) {
   const { t } = useI18n();
   const relative = useRelativeTime();
@@ -211,5 +222,26 @@ export function VersionsDialog({
         </ol>
       )}
     </Modal>
+  );
+}
+
+/** One-tap sharing to popular apps. */
+export function ShareTargets({ url, text = "" }: { url: string; text?: string }) {
+  const { t } = useI18n();
+  const msg = encodeURIComponent(`${text || t("share.message")} ${url}`.trim());
+  const targets = [
+    { name: "WhatsApp", href: `https://wa.me/?text=${msg}`, bg: "bg-[#25D366]" },
+    { name: "Telegram", href: `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text || t("share.message"))}`, bg: "bg-[#229ED9]" },
+    { name: "X", href: `https://twitter.com/intent/tweet?text=${msg}`, bg: "bg-black" },
+    { name: "Facebook", href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, bg: "bg-[#1877F2]" },
+  ];
+  return (
+    <div className="grid grid-cols-4 gap-2">
+      {targets.map((x) => (
+        <a key={x.name} href={x.href} target="_blank" rel="noreferrer" className={`rounded-xl ${x.bg} px-2 py-2 text-center text-xs font-semibold text-white transition hover:opacity-90`}>
+          {x.name}
+        </a>
+      ))}
+    </div>
   );
 }

@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 
-export const MODEL = process.env.ANTHROPIC_MODEL || "claude-opus-5-5";
+import type { ModelInfo } from "@/lib/plans";
 
 type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 const EFFORTS: Effort[] = ["low", "medium", "high", "xhigh", "max"];
@@ -20,8 +20,8 @@ export const EFFORT = {
  * Server-side refusal fallback: if the model declines a request for policy
  * reasons, the API re-runs it on Anthropic's recommended fallback model.
  */
-export function fallbackParams(): { betas: Anthropic.Beta.AnthropicBeta[]; fallbacks: "default" } {
-  return { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" };
+export function fallbackParams(model: ModelInfo): { betas?: Anthropic.Beta.AnthropicBeta[]; fallbacks?: "default" } {
+  return model.fallback ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" } : {};
 }
 
 let client: Anthropic | null = null;

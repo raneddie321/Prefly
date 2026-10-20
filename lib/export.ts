@@ -12,6 +12,7 @@ export interface ExportableGame {
   palette: string[];
   description: string;
   html: string;
+  files?: Record<string, string> | null;
   assets: AssetMap;
 }
 
@@ -90,6 +91,26 @@ self.addEventListener("fetch", (e) => {
   );
 });
 `;
+
+/** The project's source files (plus its sprites as .svg) for developers. */
+export async function downloadSource(game: ExportableGame) {
+  const zip = new JSZip();
+  const files = game.files && Object.keys(game.files).length ? game.files : { "index.html": game.html };
+  for (const [path, content] of Object.entries(files)) zip.file(path, content);
+  for (const asset of Object.values(game.assets)) zip.file(`assets/${asset.id}.svg`, asset.svg);
+  zip.file(
+    "README.md",
+    [
+      `# ${game.title}`,
+      "",
+      "Made with Prefly. The game uses the Prefly runtime (`window.PREFLY`) for sprites, sound effects,",
+      "saves and multiplayer; the playable single-file build (Download → HTML) already includes it.",
+      "",
+      "Sprites are in `assets/` as SVG files.",
+    ].join("\n"),
+  );
+  saveBlob(await zip.generateAsync({ type: "blob", compression: "DEFLATE" }), `${slugify(game.title)}-source.zip`);
+}
 
 /** A PWA package: installable on phones and desktops once hosted (itch.io, Netlify, GitHub Pages…). */
 export async function downloadZip(game: ExportableGame, locale: Locale) {

@@ -1,5 +1,6 @@
 import { parse, type Node } from "acorn";
 import type { RuntimeError } from "@/lib/types";
+import { bundleProject, isJsPath } from "@/lib/runtime/bundle";
 
 /**
  * Static QA for generated games: parses every inline script, validates the
@@ -10,6 +11,8 @@ import type { RuntimeError } from "@/lib/types";
 export interface QaIssue {
   message: string;
   line?: number;
+  /** Project file the issue is in (multi-file projects). */
+  file?: string;
 }
 
 const ALLOWED_HOSTS = ["cdn.jsdelivr.net", "unpkg.com", "cdnjs.cloudflare.com"];
@@ -29,7 +32,28 @@ function hostAllowed(url: string): boolean {
   }
 }
 
-export function staticCheck(html: string): QaIssue[] {
+/** Checks every file of a multi-file project, plus how they link together. */
+export function checkProject(files: Record<string, string>): QaIssue[] {
+  const issues: QaIssue[] = [];
+  if (!files["index.html"]) return [{ message: "The project has no index.html." }];
+  for (const issue of staticCheck(files["index.html"], true)) issues.push({ ...issue, file: "index.html" });
+  for (const [path, code] of Object.entries(files)) {
+    if (!isJsPath(path) || !code.trim()) continue;
+    try {
+      parse(code, { ecmaVersion: "latest", sourceType: "module", locations: true });
+    } catch (err) {
+      const e = err as SyntaxError & { loc?: { line: number } };
+      issues.push({ file: path, line: e.loc?.line, message: `SyntaxError: ${e.message.replace(/\s*\(\d+:\d+\)$/, "")}` });
+    }
+    if (/(?<![.\w$]|function\s)(alert|confirm|prompt)\s*\(/.test(stripStringsAndComments(code))) {
+      issues.push({ file: path, message: "Uses alert/confirm/prompt, which are blocked in the game sandbox. Replace with in-game UI." });
+    }
+  }
+  for (const b of bundleProject(files).issues) issues.push(b);
+  return issues;
+}
+
+export function staticCheck(html: string, project = false): QaIssue[] {
   const issues: QaIssue[] = [];
   if (!html.trim()) return [{ message: "The game file is empty." }];
   if (!/<html[\s>]/i.test(html) || !/<\/html>/i.test(html)) {
@@ -69,6 +93,7 @@ export function staticCheck(html: string): QaIssue[] {
     const type = /\btype\s*=\s*["']?([^"'\s>]+)/i.exec(s.attrs)?.[1]?.toLowerCase();
     const src = /\bsrc\s*=\s*["']([^"']+)["']/i.exec(s.attrs)?.[1];
     if (src) {
+      if (project && !/^([a-z][a-z0-9+.-]*:|\/\/)/i.test(src)) continue;
       if (!hostAllowed(src)) issues.push({ message: `External script from a disallowed location: ${src}`, line: s.line });
       continue;
     }
@@ -101,6 +126,7 @@ export function staticCheck(html: string): QaIssue[] {
           continue;
         }
         if (spec.startsWith(".") || spec.startsWith("/")) {
+          if (project) continue;
           issues.push({ message: `Relative import "${spec}" cannot work in a single-file game.`, line });
           continue;
         }
@@ -125,12 +151,15 @@ function stripStringsAndComments(code: string): string {
 }
 
 /** Formats issues or runtime errors with surrounding code for the fixer agent. */
-export function describeProblems(html: string, problems: (QaIssue | RuntimeError)[]): string {
-  const lines = html.split("\n");
+export function describeProblems(source: string | Record<string, string>, problems: (QaIssue | RuntimeError)[]): string {
+  const files = typeof source === "string" ? { "index.html": source } : source;
   return problems
     .slice(0, 12)
     .map((p, i) => {
-      const head = `${i + 1}. ${"kind" in p ? `[${p.kind}] ` : ""}${p.message}${p.line ? ` (line ${p.line})` : ""}`;
+      const file = p.file && p.file in files ? p.file : "index.html";
+      const lines = (files[file] ?? "").split("\n");
+      const where = p.line ? ` (${p.file ? `${file}:` : "line "}${p.line})` : p.file ? ` (${p.file})` : "";
+      const head = `${i + 1}. ${"kind" in p ? `[${p.kind}] ` : ""}${p.message}${where}`;
       const stack = "stack" in p && p.stack ? `\n   stack: ${p.stack.split("\n").slice(0, 4).join(" | ")}` : "";
       if (!p.line || p.line > lines.length) return head + stack;
       const from = Math.max(1, p.line - 3);

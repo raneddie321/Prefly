@@ -2,12 +2,18 @@
  * Parsing of the coder agent's tagged output:
  *
  *   <message>…</message>
- *   <file>…</file>                       full file, or
- *   <edit><search>…</search><replace>…</replace></edit>   targeted edits
+ *   <file path="js/game.js">…</file>          whole files (create or replace)
+ *   <edit file="js/game.js"><search>…</search><replace>…</replace></edit>
+ *   <delete path="js/old.js"/>
  *   <asset-request id="…" width="…" height="…">description</asset-request>
+ *
+ * A <file> or <edit> without a path refers to index.html.
  */
 
+export type FileMap = Record<string, string>;
+
 export interface Edit {
+  file?: string;
   search: string;
   replace: string;
 }
@@ -21,9 +27,25 @@ export interface AssetRequest {
 
 export interface CoderResponse {
   message: string;
+  /** Whole files written in this reply. */
+  files: FileMap;
+  /** Legacy single-file view: the index.html written in this reply, if any. */
   file: string | null;
   edits: Edit[];
+  deletes: string[];
   assetRequests: AssetRequest[];
+}
+
+/** Normalizes a project path: relative, forward slashes, no "..". */
+export function normalizePath(path: string): string | null {
+  const parts: string[] = [];
+  for (const part of path.trim().replace(/\\/g, "/").replace(/^\.?\//, "").split("/")) {
+    if (!part || part === ".") continue;
+    if (part === "..") return null;
+    parts.push(part);
+  }
+  const out = parts.join("/");
+  return /^[\w.\-/]+$/.test(out) && out.length <= 120 ? out : null;
 }
 
 /** Drops exactly one leading and one trailing newline that wraps tag content. */
@@ -40,20 +62,27 @@ function stripFences(text: string): string {
 export function parseCoderResponse(text: string): CoderResponse {
   const message = /<message>([\s\S]*?)<\/message>/.exec(text)?.[1].trim() ?? "";
 
-  let file: string | null = null;
-  const fileMatch = /<file>([\s\S]*?)<\/file>/.exec(text);
-  if (fileMatch) {
-    file = stripFences(unwrap(fileMatch[1])).trim();
-  } else if (!/<edit>/.test(text)) {
+  const files: FileMap = {};
+  for (const m of text.matchAll(/<file(?:\s+path="([^"]*)")?\s*>([\s\S]*?)<\/file>/g)) {
+    const path = normalizePath(m[1] ?? "index.html");
+    if (path) files[path] = stripFences(unwrap(m[2])).replace(/^\s*\n/, "").replace(/\s+$/, "") + "\n";
+  }
+  if (!Object.keys(files).length && !/<edit[\s>]/.test(text)) {
     // Tolerate a missing <file> wrapper when the reply is a bare HTML document.
     const doc = /<!DOCTYPE html[\s\S]*<\/html>/i.exec(text);
-    if (doc) file = doc[0];
+    if (doc) files["index.html"] = doc[0];
   }
 
   const edits: Edit[] = [];
-  const editRe = /<edit>\s*<search>([\s\S]*?)<\/search>\s*<replace>([\s\S]*?)<\/replace>\s*<\/edit>/g;
+  const editRe = /<edit(?:\s+file="([^"]*)")?\s*>\s*<search>([\s\S]*?)<\/search>\s*<replace>([\s\S]*?)<\/replace>\s*<\/edit>/g;
   for (const m of text.matchAll(editRe)) {
-    edits.push({ search: unwrap(m[1]), replace: unwrap(m[2]) });
+    edits.push({ file: normalizePath(m[1] ?? "index.html") ?? "index.html", search: unwrap(m[2]), replace: unwrap(m[3]) });
+  }
+
+  const deletes: string[] = [];
+  for (const m of text.matchAll(/<delete\s+path="([^"]*)"\s*\/?>/g)) {
+    const path = normalizePath(m[1]);
+    if (path && path !== "index.html") deletes.push(path);
   }
 
   const assetRequests: AssetRequest[] = [];
@@ -70,7 +99,8 @@ export function parseCoderResponse(text: string): CoderResponse {
     });
   }
 
-  return { message, file, edits, assetRequests };
+  const file = files["index.html"]?.replace(/\n$/, "") ?? null;
+  return { message, files, file, edits, deletes, assetRequests };
 }
 
 export function parseAttributes(source: string): Record<string, string> {
@@ -133,6 +163,28 @@ function fuzzyReplace(source: string, edit: Edit): string | null {
   return null;
 }
 
+/** Applies a parsed reply to a project's files. Edits that don't match are reported. */
+export function applyChanges(current: FileMap, reply: Pick<CoderResponse, "files" | "edits" | "deletes">): { files: FileMap; failed: Edit[] } {
+  const files: FileMap = { ...current, ...reply.files };
+  for (const path of reply.deletes) delete files[path];
+  const failed: Edit[] = [];
+  const byFile = new Map<string, Edit[]>();
+  for (const e of reply.edits) {
+    const path = e.file ?? "index.html";
+    byFile.set(path, [...(byFile.get(path) ?? []), e]);
+  }
+  for (const [path, edits] of byFile) {
+    if (!(path in files)) {
+      failed.push(...edits);
+      continue;
+    }
+    const applied = applyEdits(files[path], edits);
+    files[path] = applied.result;
+    failed.push(...applied.failed);
+  }
+  return { files, failed };
+}
+
 /** Extracts the user-facing message while the response is still streaming. */
 export function streamingMessage(text: string): string {
   const start = text.indexOf("<message>");
@@ -148,6 +200,15 @@ export function streamingCode(text: string): string {
   if (end === -1) return "";
   return text
     .slice(end + "</message>".length)
+    .replace(/<file(\s+path="([^"]*)")?\s*>/g, (_m, _a, path) => `// ===== ${path ?? "index.html"} =====`)
+    .replace(/<edit(\s+file="([^"]*)")?\s*>/g, (_m, _a, path) => `// ===== edit ${path ?? "index.html"} =====`)
     .replace(/<\/?(file|edit|search|replace)>/g, "")
     .replace(/^\s+/, "");
+}
+
+/** The file currently being written in a streaming response. */
+export function streamingFile(text: string): string | null {
+  const all = [...text.matchAll(/<(?:file|edit)(?:\s+(?:path|file)="([^"]*)")?\s*>/g)];
+  const last = all.at(-1);
+  return last ? (last[1] ?? "index.html") : null;
 }

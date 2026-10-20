@@ -6,7 +6,10 @@ import { fileToImageInput } from "@/lib/image";
 import type { GenerationState } from "@/lib/generation-store";
 import type { ImageInput, StageId } from "@/lib/types";
 import { LogoMark } from "../brand";
-import { AlertIcon, ArrowUpIcon, ImageIcon, StopIcon, WandIcon, XIcon } from "../icons";
+import Link from "next/link";
+import { AlertIcon, ArrowUpIcon, ImageIcon, SparklesIcon, StopIcon, WandIcon, XIcon } from "../icons";
+import { ModelPicker } from "../model-picker";
+import { useAuth } from "../auth-provider";
 import { AgentChips, AgentProgress, TestBadge, type TestStatus } from "./agent-progress";
 
 export interface ChatMessage {
@@ -38,6 +41,7 @@ export function ChatPanel({
   onRetry: (() => void) | null;
 }) {
   const { t } = useI18n();
+  const { plan } = useAuth();
   const [text, setText] = useState("");
   const [image, setImage] = useState<(ImageInput & { preview: string }) | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -112,6 +116,14 @@ export function ChatPanel({
                     {t("studio.retry")}
                   </button>
                 )}
+                {(gen.errorCode === "quota" || gen.errorCode === "plan") && (
+                  <Link
+                    href={plan === "guest" ? "/login" : "/pricing"}
+                    className="mt-2 flex w-fit items-center gap-1.5 rounded-xl bg-gradient-to-r from-brand-500 to-fuchsia-500 px-3 py-1.5 text-xs font-semibold text-white"
+                  >
+                    <SparklesIcon size={13} /> {plan === "guest" ? t("plan.createAccount") : t("plan.upgrade")}
+                  </Link>
+                )}
               </div>
             </div>
           )}
@@ -141,10 +153,8 @@ export function ChatPanel({
             </button>
           </div>
         )}
-        <div className="flex items-end gap-2 rounded-2xl border border-line bg-white p-2 focus-within:border-brand-200">
-          <button onClick={() => fileRef.current?.click()} className="rounded-xl p-2 text-ink-soft hover:bg-black/5" aria-label={t("home.attachImage")}>
-            <ImageIcon size={20} />
-          </button>
+        <div className="rounded-2xl border border-line bg-white p-2 focus-within:border-brand-200 focus-within:shadow-[0_0_0_4px_rgb(139_92_246/0.08)]">
+        <div className="flex items-end gap-2">
           <input
             ref={fileRef}
             type="file"
@@ -170,7 +180,7 @@ export function ChatPanel({
             maxLength={4000}
             placeholder={t("studio.chatPlaceholder")}
             disabled={!hasGame && !running}
-            className="max-h-44 min-h-[40px] flex-1 resize-none bg-transparent px-1 py-2 text-[0.95rem] outline-none placeholder:text-ink-muted"
+            className="max-h-44 min-h-[40px] flex-1 resize-none bg-transparent px-1.5 py-2 text-[0.95rem] outline-none placeholder:text-ink-muted"
           />
           {running ? (
             <button onClick={onStop} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ink text-white" aria-label={t("studio.stop")}>
@@ -186,6 +196,13 @@ export function ChatPanel({
               <ArrowUpIcon size={20} strokeWidth={2} />
             </button>
           )}
+        </div>
+        <div className="mt-1 flex items-center gap-1.5">
+          <button onClick={() => fileRef.current?.click()} className="rounded-lg p-1.5 text-ink-soft hover:bg-black/5" aria-label={t("home.attachImage")}>
+            <ImageIcon size={18} />
+          </button>
+          <ModelPicker compact direction="up" />
+        </div>
         </div>
         {remaining !== null && (
           <p className="mt-1.5 flex items-center gap-1 px-1 text-[11px] text-ink-muted">

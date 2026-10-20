@@ -33,15 +33,19 @@ export const RUNTIME_SOURCE = String.raw`
   }
 
   var errorCount = 0;
-  function report(kind, message, line, col, stack) {
+  function report(kind, message, line, col, stack, filename) {
     if (errorCount++ > 40) return;
-    post({ type: 'error', kind: kind, message: String(message || 'Unknown error').slice(0, 600), line: line || 0, col: col || 0, stack: stack ? String(stack).slice(0, 2000) : '' });
+    var file = '';
+    var m = /prefly:\/\/\/([^\s:)]+):(\d+):(\d+)/.exec(String(filename || '') + ':' + (line || 0) + ':' + (col || 0) + ' ' + String(stack || ''));
+    if (m) { file = m[1]; line = Number(m[2]); col = Number(m[3]); }
+    else if (filename && String(filename).indexOf('data:') === 0) { line = 0; col = 0; }
+    post({ type: 'error', kind: kind, message: String(message || 'Unknown error').slice(0, 600), file: file, line: line || 0, col: col || 0, stack: stack ? String(stack).replace(/data:[^\s)]{60,}/g, 'data:…').slice(0, 2000) : '' });
   }
   P.reportError = report;
   window.addEventListener('error', function (e) {
     var t = e.target;
-    if (t && t !== window && (t.src || t.href)) { report('resource', 'Failed to load ' + (t.src || t.href)); return; }
-    report('error', e.message || (e.error && e.error.message) || 'Script error', e.lineno, e.colno, e.error && e.error.stack);
+    if (t && t !== window && (t.src || t.href)) { var u = String(t.src || t.href); report('resource', 'Failed to load ' + (u.indexOf('data:') === 0 ? 'a project script' : u)); return; }
+    report('error', e.message || (e.error && e.error.message) || 'Script error', e.lineno, e.colno, e.error && e.error.stack, e.filename);
   }, true);
   window.addEventListener('unhandledrejection', function (e) {
     var r = e.reason;

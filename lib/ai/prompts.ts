@@ -129,8 +129,14 @@ const ENGINEERING_STANDARD = `# Runtime environment
 - PREFLY.share(text) — opens the host's share sheet (e.g. "I scored 1200 in <game>!").
 - PREFLY.locale — 'en' or 'he'.
 
+# Project structure
+A game is a small, well-organized project of several files, like a professional codebase:
+- index.html — <!DOCTYPE html>, <html lang dir>, <meta charset="utf-8">, <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">, <title>, <link rel="stylesheet" href="css/style.css">, the HUD/menu markup, the import map (3D only) and exactly one entry script: <script type="module" src="js/main.js"></script>. No game logic inline.
+- css/style.css — all styles. html,body{margin:0;height:100%;overflow:hidden;background:…;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}.
+- js/*.js — ES modules with one clear responsibility each, importing each other with relative paths ('./player.js'). A typical split: main.js (boot, game loop, state machine), config.js (tuning constants), input.js (keyboard + touch controls), player.js, enemies.js / entities.js, level.js or world.js, render.js (or scene.js for 3D), ui.js (menus/HUD), audio.js (music + sfx), particles.js, utils.js. Use 5–12 files; split by responsibility, not by size.
+- Only .html, .css and .js files. Every relative import and every href/src must point to a file in the project.
+
 # Engineering standard
-- Structure: <!DOCTYPE html>, <html lang dir>, <meta charset="utf-8">, <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">, <title>, one <style>, markup, scripts. CSS: html,body{margin:0;height:100%;overflow:hidden;background:…;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}.
 - Canvas sizing: fill the viewport; backing store = CSS size × min(devicePixelRatio, 2); handle resize. Use a logical coordinate system / camera so the game is fully playable in both portrait phones and landscape monitors (UI and play area adapt; nothing important off-screen).
 - Loop: requestAnimationFrame with delta time clamped to ≤ 1/30 s so speed is frame-rate independent. Auto-pause when document.hidden.
 - Game states: title screen (name, one-line goal, controls for keyboard AND touch, big Play button) → playing → paused (P/Escape and an on-screen pause button) → game over / victory (score, best score saved in localStorage, Restart button; Enter/Space also restarts). Restart fully resets state without reloading.
@@ -140,7 +146,7 @@ const ENGINEERING_STANDARD = `# Runtime environment
   <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}</script>
   Only use APIs that exist in r170. Good lighting (hemisphere + directional with soft shadows on a few key objects), fog, a smooth follow camera, and lightweight geometry (aim < 150 draw calls; reuse geometries/materials; InstancedMesh for repeated props) so it runs on phones. Build characters/vehicles from grouped primitives with care — they should look intentional and charming.
 - Feel: every important action gets feedback (particles + sound + motion). Readable HUD (score, lives/health, level/time). Difficulty ramps up.
-- Correctness: no undefined variables, no temporal-dead-zone access, null-check DOM lookups, no infinite loops, no errors in the console. Every feature in the design must actually work. Before finishing, trace title → play → lose/win → restart in your head and fix anything that would break.`;
+- Correctness: no undefined variables, no temporal-dead-zone access, no circular-import initialization bugs, every imported name actually exported, null-check DOM lookups, no infinite loops, no errors in the console. Every feature in the design must actually work. Before finishing, trace title → play → lose/win → restart in your head and fix anything that would break.`;
 
 const MULTIPLAYER_GUIDE = `# Online multiplayer (PREFLY.multiplayer)
 Real-time rooms over the internet; players on different devices join with a room code or an invite link.
@@ -184,14 +190,21 @@ ${JSON.stringify({ ...plan, sprites: undefined }, null, 2)}
 ${assetList(plan.sprites)}
 
 # Response format
-Reply with exactly these two parts and nothing else (no markdown fences):
+Reply with exactly these parts and nothing else (no markdown fences):
 <message>
 2–4 short, friendly sentences to the player in ${languageName(locale)}: what you built and how to play (mention desktop and touch controls). No code.
 </message>
-<file>
+<file path="index.html">
 <!DOCTYPE html>
-…the complete game…
-</file>`;
+…
+</file>
+<file path="css/style.css">
+…
+</file>
+<file path="js/main.js">
+…
+</file>
+…one <file path="…"> block per project file, each complete…`;
 }
 
 export const EDIT_FORMAT = `# Response format
@@ -199,30 +212,34 @@ Start with:
 <message>
 1–3 short sentences to the player describing what you changed (in the player's language). No code.
 </message>
-Then EITHER targeted edits (preferred for small and medium changes):
-<edit>
+Then any combination of:
+- Targeted edits (preferred for small and medium changes):
+<edit file="js/player.js">
 <search>
-exact, contiguous lines copied from the current file — enough to be unique (usually 3–15 lines)
+exact, contiguous lines copied from that file — enough to be unique (usually 3–15 lines)
 </search>
 <replace>
 the replacement lines
 </replace>
 </edit>
-…one <edit> block per change, in file order, non-overlapping…
-OR, when the change touches most of the file, the complete new file:
-<file>
-<!DOCTYPE html>
-…
+  …one <edit> block per change, non-overlapping, in order within each file…
+- Whole files, for new files or files you rewrite substantially:
+<file path="js/powerups.js">
+…complete file…
 </file>
+- Deleting a file: <delete path="js/old.js"/>
+Remember to wire new files in (imports, index.html).
 
 To get new 2D art from the illustrator, add (before your edits):
 <asset-request id="snake_case_id" width="64" height="64">detailed visual description</asset-request>
 It will be available as PREFLY.images.snake_case_id. Requesting an existing id redraws it.
 
-Rules: search text must match the current file exactly, including indentation. Change only what is needed for the request and keep every other feature working. No markdown fences.`;
+Rules: search text must match the current file exactly, including indentation. Change only what is needed for the request and keep every other feature working. No markdown fences.
+If the project is still a single index.html and the change is substantial, you may restructure it into multiple files (write the new files and rewrite index.html).`;
 
 export interface EditContext {
-  html: string;
+  /** Source files of the project. */
+  files: Record<string, string>;
   plan: GamePlan | null;
   assets: AssetMap;
   history: { role: "user" | "assistant"; content: string }[];
@@ -242,10 +259,10 @@ ${assetList(meta)}
 # Conversation so far
 ${history}
 
-# Current game file
-<current-file>
-${ctx.html}
-</current-file>`;
+# Current project files
+${Object.entries(ctx.files)
+  .map(([path, content]) => `<current-file path="${path}">\n${content}\n</current-file>`)
+  .join("\n\n")}`;
 }
 
 export function editRequest(ctx: EditContext, instruction: string): string {
@@ -278,6 +295,7 @@ Find the root cause of each problem and fix it with minimal, safe edits. Also fi
 ${EDIT_FORMAT}`;
 }
 
-export function editFallbackRequest(failed: number): string {
-  return `${failed} of your <search> blocks did not match the current file exactly, so no edits were applied. Reply again with the <message> and the COMPLETE updated file in <file>…</file> (no <edit> blocks).`;
+export function editFallbackRequest(failed: { file?: string }[]): string {
+  const paths = [...new Set(failed.map((f) => f.file ?? "index.html"))];
+  return `${failed.length} of your <search> blocks did not match the current files exactly (in ${paths.join(", ")}), so nothing was applied. Reply again with the <message> and, for every file you are changing, the COMPLETE updated file in <file path="…">…</file> (no <edit> blocks).`;
 }

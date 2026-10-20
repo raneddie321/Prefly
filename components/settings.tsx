@@ -7,7 +7,8 @@ import { useI18n } from "@/lib/i18n/client";
 import { getSupabase } from "@/lib/supabase/client";
 import type { Locale } from "@/lib/types";
 import { useAuth } from "./auth-provider";
-import { CheckIcon, GlobeIcon, LogOutIcon, SpinnerIcon } from "./icons";
+import { CheckIcon, GlobeIcon, LogOutIcon, SparklesIcon, SpinnerIcon } from "./icons";
+import { openBilling } from "./pricing";
 
 export function Settings() {
   const { t, locale, setLocale } = useI18n();
@@ -17,6 +18,7 @@ export function Settings() {
   return (
     <div className="mx-auto max-w-2xl px-4 pb-16 pt-20 sm:px-8 lg:pt-12">
       <h1 className="text-3xl font-extrabold tracking-tight">{t("settings.title")}</h1>
+      <PlanCard />
 
       <section className="mt-8 rounded-3xl border border-line bg-white p-6 shadow-card">
         <h2 className="flex items-center gap-2 font-semibold">
@@ -69,6 +71,50 @@ export function Settings() {
         </section>
       )}
     </div>
+  );
+}
+
+function PlanCard() {
+  const { t } = useI18n();
+  const { plan, usage, billingEnabled, aiEnabled } = useAuth();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [upgraded, setUpgraded] = useState(false);
+  useEffect(() => {
+    setUpgraded(new URLSearchParams(window.location.search).has("upgraded"));
+  }, []);
+  if (!aiEnabled) return null;
+  return (
+    <section className={`mt-8 rounded-3xl p-6 shadow-card ${plan === "pro" ? "bg-gradient-to-br from-brand-500 to-fuchsia-500 text-white" : "border border-line bg-white"}`}>
+      {upgraded && <p className="mb-4 rounded-xl bg-white/20 px-3 py-2 text-sm font-medium">🎉 {t("settings.upgraded")}</p>}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <p className={`text-xs font-semibold uppercase tracking-wider ${plan === "pro" ? "text-white/80" : "text-ink-muted"}`}>{t("settings.plan")}</p>
+          <p className="mt-1 text-xl font-bold">{plan === "pro" ? "Prefly Pro" : plan === "guest" ? t("plan.guest") : t("plan.free")}</p>
+          {usage && <p className={`mt-1 text-sm ${plan === "pro" ? "text-white/85" : "text-ink-soft"}`}>{t("plan.usage", { used: usage.used, limit: usage.limit })}</p>}
+        </div>
+        {plan === "pro" ? (
+          billingEnabled && (
+            <button
+              onClick={async () => {
+                setBusy(true);
+                setError(await openBilling("portal"));
+                setBusy(false);
+              }}
+              disabled={busy}
+              className="rounded-xl bg-white/20 px-4 py-2.5 text-sm font-semibold backdrop-blur hover:bg-white/30"
+            >
+              {t("pricing.manage")}
+            </button>
+          )
+        ) : (
+          <Link href={plan === "guest" ? "/login" : "/pricing"} className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-brand-500 to-fuchsia-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-brand-500/25">
+            <SparklesIcon size={15} /> {plan === "guest" ? t("plan.createAccount") : t("plan.upgrade")}
+          </Link>
+        )}
+      </div>
+      {error && <p className="mt-3 text-sm">{error}</p>}
+    </section>
   );
 }
 

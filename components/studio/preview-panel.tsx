@@ -14,6 +14,7 @@ export interface PreviewGame {
   emoji: string;
   palette: string[];
   html: string | null;
+  files?: Record<string, string> | null;
   assets: AssetMap;
 }
 
@@ -47,8 +48,17 @@ export function PreviewPanel({
   const codeRef = useRef<HTMLPreElement>(null);
   const [toast, setToast] = useState<string | null>(null);
 
-  const code = busy && liveCode ? liveCode : (game.html ?? "");
+  const sourceFiles = useMemo<Record<string, string>>(
+    () => (game.files && Object.keys(game.files).length ? game.files : game.html ? { "index.html": game.html } : {}),
+    [game.files, game.html],
+  );
+  const paths = useMemo(() => Object.keys(sourceFiles).sort((a, b) => (a === "index.html" ? -1 : b === "index.html" ? 1 : a.localeCompare(b))), [sourceFiles]);
+  const [selected, setSelected] = useState("index.html");
+  const activePath = selected in sourceFiles ? selected : (paths[0] ?? "index.html");
+  const streaming = busy && Boolean(liveCode);
+  const code = streaming ? liveCode : (sourceFiles[activePath] ?? "");
   const codeLines = useMemo(() => code.split("\n"), [code]);
+  const totalLines = useMemo(() => Object.values(sourceFiles).reduce((n, f) => n + f.split("\n").length, 0), [sourceFiles]);
 
   useEffect(() => {
     if (tab === "code" && busy && codeRef.current) codeRef.current.scrollTop = codeRef.current.scrollHeight;
@@ -123,7 +133,42 @@ export function PreviewPanel({
       </div>
 
       {tab === "code" ? (
-        <pre ref={codeRef} className="code-view min-h-0 flex-1 overflow-auto bg-[#0f0f1c] py-3 font-mono text-[12.5px] leading-[1.6] text-[#d6d6ef] scrollbar-thin" dir="ltr">
+        <div className="flex min-h-0 flex-1 bg-[#0f0f1c]" dir="ltr">
+        {!streaming && paths.length > 0 && (
+          <nav className="hidden w-52 shrink-0 overflow-y-auto border-e border-white/5 bg-[#0b0b16] py-3 scrollbar-thin sm:block">
+            <p className="px-4 pb-2 text-[10px] font-semibold uppercase tracking-wider text-[#6b6b90]">
+              {paths.length} {t("studio.files")} · {totalLines} {t("studio.lines")}
+            </p>
+            {paths.map((path) => {
+              const depth = path.split("/").length - 1;
+              const name = path.split("/").pop();
+              const ext = name?.split(".").pop();
+              return (
+                <button
+                  key={path}
+                  onClick={() => setSelected(path)}
+                  title={path}
+                  className={`flex w-full items-center gap-2 truncate py-1.5 pe-3 text-start font-mono text-[12px] ${path === activePath ? "bg-white/[0.07] text-white" : "text-[#a5a5c8] hover:bg-white/[0.03] hover:text-white"}`}
+                  style={{ paddingInlineStart: 16 + depth * 12 }}
+                >
+                  <span className={`h-2 w-2 shrink-0 rounded-sm ${ext === "js" ? "bg-yellow-300" : ext === "css" ? "bg-sky-400" : "bg-orange-400"}`} />
+                  {depth > 0 && <span className="text-[#6b6b90]">{path.split("/").slice(0, -1).join("/")}/</span>}
+                  <span className="truncate">{name}</span>
+                </button>
+              );
+            })}
+          </nav>
+        )}
+        <pre ref={codeRef} className="code-view min-h-0 min-w-0 flex-1 overflow-auto py-3 font-mono text-[12.5px] leading-[1.6] text-[#d6d6ef] scrollbar-thin">
+          {!streaming && paths.length > 1 && (
+            <select value={activePath} onChange={(e) => setSelected(e.target.value)} className="mx-3 mb-2 rounded-lg bg-white/10 px-2 py-1 text-xs text-white sm:hidden">
+              {paths.map((p) => (
+                <option key={p} value={p} className="text-ink">
+                  {p}
+                </option>
+              ))}
+            </select>
+          )}
           {code ? (
             codeLines.map((line, i) => (
               <div key={i} className="flex px-3 hover:bg-white/[0.03]">
@@ -135,6 +180,7 @@ export function PreviewPanel({
             <span className="px-4 text-[#5c5c80]">{t("studio.emptyPreview")}</span>
           )}
         </pre>
+        </div>
       ) : (
         <div className="relative flex min-h-0 flex-1 items-center justify-center bg-[radial-gradient(circle_at_50%_0%,#f1eeff,transparent_60%)] p-3 sm:p-5">
           <div

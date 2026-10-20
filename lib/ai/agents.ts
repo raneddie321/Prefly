@@ -1,6 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { AssetMap, GamePlan, ImageInput, SpriteSpec } from "@/lib/types";
-import { AgentError, anthropic, EFFORT, fallbackParams, MODEL } from "./client";
+import { AgentError, anthropic, EFFORT, fallbackParams } from "./client";
+import type { ModelInfo } from "@/lib/plans";
 import { ARTIST_SYSTEM, artistRequest, DESIGNER_SYSTEM, designerRequest, PLAN_SCHEMA } from "./prompts";
 import { clampSize, parseAttributes, sanitizeAssetId } from "./response";
 import type { GameMode, Locale } from "@/lib/types";
@@ -42,11 +43,12 @@ export async function designGame(input: {
   multiplayer: boolean;
   locale: Locale;
   image?: ImageInput;
+  model: ModelInfo;
 }): Promise<GamePlan> {
   const response = await anthropic().beta.messages.create({
-    model: MODEL,
+    model: input.model.api,
     max_tokens: 16000,
-    ...fallbackParams(),
+    ...fallbackParams(input.model),
     output_config: { effort: EFFORT.design, format: { type: "json_schema", schema: PLAN_SCHEMA } },
     system: [{ type: "text", text: DESIGNER_SYSTEM, cache_control: { type: "ephemeral" } }],
     messages: [
@@ -118,12 +120,13 @@ export function sanitizeSvg(svg: string, width: number, height: number): string 
 export async function drawAssets(
   plan: Pick<GamePlan, "title" | "artDirection" | "palette" | "dimension">,
   sprites: SpriteSpec[],
+  model: ModelInfo,
 ): Promise<AssetMap> {
   if (!sprites.length) return {};
   const stream = anthropic().beta.messages.stream({
-    model: MODEL,
+    model: model.api,
     max_tokens: 48000,
-    ...fallbackParams(),
+    ...fallbackParams(model),
     output_config: { effort: EFFORT.graphics },
     system: [{ type: "text", text: ARTIST_SYSTEM, cache_control: { type: "ephemeral" } }],
     messages: [{ role: "user", content: artistRequest(plan, sprites) }],
@@ -159,11 +162,12 @@ export async function runCoder(input: {
   onThinking?: (delta: string) => void;
   /** Called when a fallback model takes over and earlier partial output should be discarded. */
   onReset?: () => void;
+  model: ModelInfo;
 }): Promise<CoderTurn> {
   const stream = anthropic().beta.messages.stream({
-    model: MODEL,
+    model: input.model.api,
     max_tokens: 100000,
-    ...fallbackParams(),
+    ...fallbackParams(input.model),
     thinking: { type: "adaptive", display: "summarized" },
     output_config: { effort: EFFORT.code },
     system: [{ type: "text", text: input.system, cache_control: { type: "ephemeral" } }],
@@ -181,7 +185,7 @@ export async function runCoder(input: {
   const message = await stream.finalMessage();
   checkStop(message, "game engineer");
   if (message.stop_reason === "max_tokens") {
-    throw new AgentError("The game grew too large to finish in one go. Try asking for a smaller change.", "truncated");
+    throw new AgentError("The game grew too large to finish in one go. Try asking for a smaller change, or split it into smaller files.", "truncated");
   }
   return { text: textOf(message.content), content: message.content };
 }

@@ -44,6 +44,8 @@ export interface Project {
   multiplayer: boolean;
   plan: GamePlan | null;
   html: string | null;
+  /** Source files for multi-file projects; `html` is the compiled document. */
+  files: Record<string, string> | null;
   assets: AssetMap;
   is_public: boolean;
   published_at: string | null;
@@ -67,7 +69,7 @@ export interface ProjectMessage {
   project_id: string;
   role: "user" | "assistant";
   content: string;
-  meta: { kind?: "fix" | "error"; image?: boolean; issues?: number; agents?: StageId[] };
+  meta: { kind?: "fix" | "error"; image?: boolean; issues?: number; agents?: StageId[]; model?: string };
   created_at: string;
 }
 
@@ -81,6 +83,7 @@ export interface ProjectVersion {
 export interface RuntimeError {
   kind: string;
   message: string;
+  file?: string;
   line?: number;
   col?: number;
   stack?: string;
@@ -93,6 +96,8 @@ export interface ImageInput {
 
 export type StageId = "design" | "graphics" | "code" | "qa" | "fix" | "save";
 
+export type GenerationStep = "design" | "graphics" | "code" | "repair";
+
 /** Events streamed (as NDJSON) from /api/generate to the studio. */
 export type GenerationEvent =
   | { type: "stage"; stage: StageId; status: "start" | "done" | "failed"; detail?: string }
@@ -100,5 +105,18 @@ export type GenerationEvent =
   | { type: "thinking"; text: string }
   | { type: "delta"; text: string }
   | { type: "reset" }
-  | { type: "done"; html: string; assets: AssetMap; message: string; title: string; emoji: string; palette: string[]; versionId: number | null; remaining?: number }
+  | {
+      type: "done";
+      step: GenerationStep;
+      plan?: GamePlan;
+      assets?: AssetMap;
+      files?: Record<string, string>;
+      html?: string;
+      message?: string;
+      title?: string;
+      emoji?: string;
+      palette?: string[];
+      issues?: number;
+      remaining?: number;
+    }
   | { type: "error"; message: string; code?: string };

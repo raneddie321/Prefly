@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useI18n } from "@/lib/i18n/client";
 import type { GenerationState } from "@/lib/generation-store";
-import { streamingCode, streamingMessage } from "@/lib/ai/response";
+import { streamingCode, streamingFile, streamingMessage } from "@/lib/ai/response";
+import { MODELS } from "@/lib/plans";
 import type { StageId } from "@/lib/types";
 import { BrainIcon, BugIcon, CheckIcon, CodeIcon, PaletteIcon, SaveIcon, SparklesIcon, SpinnerIcon, WandIcon, XIcon } from "../icons";
 
@@ -47,7 +48,10 @@ export function AgentProgress({ gen }: { gen: GenerationState }) {
           {running ? <SpinnerIcon size={16} className="text-brand-500" /> : null}
           <span className={running ? "shimmer-text" : ""}>{t("studio.building")}</span>
         </span>
-        <span className="text-xs tabular-nums text-ink-muted">{elapsed}</span>
+        <span className="flex items-center gap-2 text-xs tabular-nums text-ink-muted">
+          {gen.model && <span className="rounded-full bg-canvas px-2 py-0.5">{MODELS[gen.model].name.replace("Claude ", "")}</span>}
+          {elapsed}
+        </span>
       </div>
 
       {gen.plan && (
@@ -97,7 +101,8 @@ export function AgentProgress({ gen }: { gen: GenerationState }) {
       {message && <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed">{message}</p>}
       {running && lines > 0 && (
         <p className="mt-2 flex items-center gap-1.5 text-xs text-ink-muted">
-          <CodeIcon size={13} /> {t("studio.writingCode")} · {lines} {t("studio.lines")}
+          <CodeIcon size={13} /> {t("studio.writingCode")}
+          {streamingFile(gen.text) && <span className="rounded bg-canvas px-1.5 font-mono text-[11px] text-ink-soft">{streamingFile(gen.text)}</span>}· {lines} {t("studio.lines")}
         </p>
       )}
     </div>

@@ -124,3 +124,56 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ---- Motion & glow ------------------------------------------------------ */
+@property --glow-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.aurora-animated::before {
+  animation: drift-a 18s ease-in-out infinite alternate;
+  background: linear-gradient(120deg, #d9d0ff 0%, #f3e8ff 40%, #fbcfe8 75%, #c7d2fe 100%);
+}
+.aurora-animated::after {
+  animation: drift-b 22s ease-in-out infinite alternate;
+  background: linear-gradient(120deg, #e0e7ff 0%, #f5f3ff 50%, #e9d5ff 100%);
+}
+@keyframes drift-a {
+  from { transform: rotate(-28deg) translate3d(0, 0, 0); }
+  to { transform: rotate(-18deg) translate3d(-8vmax, 6vmax, 0) scale(1.1); }
+}
+@keyframes drift-b {
+  from { transform: rotate(-24deg) translate3d(0, 0, 0); }
+  to { transform: rotate(-34deg) translate3d(10vmax, -4vmax, 0) scale(1.15); }
+}
+
+.grid-fade {
+  background-image: linear-gradient(rgb(109 93 252 / 0.06) 1px, transparent 1px), linear-gradient(90deg, rgb(109 93 252 / 0.06) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse 70% 55% at 50% 30%, black 30%, transparent 75%);
+}
+
+.text-gradient-animated {
+  background: linear-gradient(95deg, #5b45f0, #8b5cf6, #d946ef, #6d5dfc, #5b45f0);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: hue-slide 8s linear infinite;
+}
+@keyframes hue-slide {
+  to { background-position: 300% 0; }
+}
+
+.glow-border {
+  background: conic-gradient(from var(--glow-angle), #e9e5ff, #8b5cf6, #d946ef, #6d5dfc, #a5b4fc, #e9e5ff);
+  animation: glow-spin 6s linear infinite;
+}
+.glow-border:focus-within {
+  box-shadow: 0 0 0 6px rgb(139 92 246 / 0.12), var(--shadow-float);
+}
+@keyframes glow-spin {
+  to { --glow-angle: 360deg; }
+}

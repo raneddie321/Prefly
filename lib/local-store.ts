@@ -10,6 +10,7 @@ import type { AssetMap, GameMode, GamePlan, ProjectMessage } from "@/lib/types";
 export interface LocalVersion {
   id: number;
   html: string;
+  files?: Record<string, string> | null;
   assets: AssetMap;
   summary: string;
   created_at: string;
@@ -25,6 +26,7 @@ export interface LocalProject {
   multiplayer: boolean;
   plan: GamePlan | null;
   html: string | null;
+  files: Record<string, string> | null;
   assets: AssetMap;
   is_public: boolean;
   created_at: string;
@@ -73,6 +75,7 @@ export const localStore = {
       multiplayer: false,
       plan: null,
       html: null,
+      files: null,
       assets: {},
       is_public: false,
       created_at: now,
@@ -105,7 +108,7 @@ export const localStore = {
     p.messages.push({ id: nextId, project_id: id, created_at: new Date().toISOString(), ...message });
     writeAll(all);
   },
-  addVersion(id: string, version: Pick<LocalVersion, "html" | "assets" | "summary">) {
+  addVersion(id: string, version: Pick<LocalVersion, "html" | "files" | "assets" | "summary">) {
     const all = readAll();
     const p = all[id];
     if (!p) return;

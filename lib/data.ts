@@ -12,7 +12,8 @@ import { PROJECT_SUMMARY_COLUMNS, type AssetMap, type GameMode, type Locale, typ
  */
 export const isLocalMode = () => !isSupabaseConfigured();
 
-type Editable = Partial<Pick<Project, "title" | "html" | "assets" | "is_public" | "published_at" | "author_name">>;
+type Editable = Partial<Pick<Project, "title" | "html" | "files" | "assets" | "is_public" | "published_at" | "author_name">>;
+type VersionData = { html: string; files?: Record<string, string> | null; assets: AssetMap; summary: string };
 
 export async function createProject(fields: { title: string; mode: GameMode; multiplayer: boolean }): Promise<string> {
   if (isLocalMode()) return localStore.create(fields).id;
@@ -65,17 +66,17 @@ export async function listVersions(projectId: string): Promise<ProjectVersion[]>
   return (data ?? []) as ProjectVersion[];
 }
 
-export async function getVersion(projectId: string, versionId: number): Promise<{ html: string; assets: AssetMap; summary: string } | null> {
+export async function getVersion(projectId: string, versionId: number): Promise<VersionData | null> {
   if (isLocalMode()) return localStore.get(projectId)?.versions.find((v) => v.id === versionId) ?? null;
   const { data } = await getSupabase()
     .from("project_versions")
-    .select("html,assets,summary")
+    .select("html,files,assets,summary")
     .eq("id", versionId)
-    .single<{ html: string; assets: AssetMap; summary: string }>();
+    .single<VersionData>();
   return data;
 }
 
-export async function addVersion(projectId: string, version: { html: string; assets: AssetMap; summary: string }) {
+export async function addVersion(projectId: string, version: VersionData) {
   if (isLocalMode()) return localStore.addVersion(projectId, version);
   await getSupabase().from("project_versions").insert({ project_id: projectId, ...version });
 }
@@ -87,7 +88,7 @@ export async function addMessage(projectId: string, message: Pick<ProjectMessage
 
 /** Copies a game (yours, a public one, or a built-in demo) into a new project. */
 export async function remixProject(sourceId: string, titleSuffix: string, locale: Locale): Promise<string> {
-  let source: Pick<Project, "title" | "description" | "emoji" | "palette" | "mode" | "multiplayer" | "plan" | "html" | "assets"> | null = null;
+  let source: Pick<Project, "title" | "description" | "emoji" | "palette" | "mode" | "multiplayer" | "plan" | "html" | "assets"> & { files?: Record<string, string> | null } | null = null;
   let remixedFrom: string | null = sourceId;
   if (sourceId.startsWith("demo-")) {
     const { html, plan } = buildTemplateGame(sourceId.slice(5) as TemplateId, locale);
@@ -99,7 +100,7 @@ export async function remixProject(sourceId: string, titleSuffix: string, locale
     await ensureUser();
     const { data } = await getSupabase()
       .from("projects")
-      .select("title,description,emoji,palette,mode,multiplayer,plan,html,assets")
+      .select("title,description,emoji,palette,mode,multiplayer,plan,html,files,assets")
       .eq("id", sourceId)
       .single();
     source = data;
@@ -115,12 +116,13 @@ export async function remixProject(sourceId: string, titleSuffix: string, locale
     multiplayer: source.multiplayer,
     plan: source.plan,
     html: source.html,
+    files: source.files ?? null,
     assets: source.assets,
   };
   const summary = `Remix of ${source.title}`;
   if (isLocalMode()) {
     const created = localStore.create(fields);
-    if (source.html) localStore.addVersion(created.id, { html: source.html, assets: source.assets, summary });
+    if (source.html) localStore.addVersion(created.id, { html: source.html, files: source.files ?? null, assets: source.assets, summary });
     return created.id;
   }
   await ensureUser();
@@ -131,6 +133,6 @@ export async function remixProject(sourceId: string, titleSuffix: string, locale
     .select("id")
     .single<{ id: string }>();
   if (error || !created) throw new Error(error?.message ?? "Could not copy the game");
-  if (source.html) await supabase.from("project_versions").insert({ project_id: created.id, html: source.html, assets: source.assets, summary });
+  if (source.html) await supabase.from("project_versions").insert({ project_id: created.id, html: source.html, files: source.files ?? null, assets: source.assets, summary });
   return created.id;
 }

@@ -6,12 +6,12 @@ import { useEffect, useState } from "react";
 import { useI18n } from "@/lib/i18n/client";
 import { useAuth } from "./auth-provider";
 import { Logo } from "./brand";
-import { ChevronRightIcon, FolderIcon, MenuIcon, PlusIcon, SettingsIcon, UsersIcon, XIcon } from "./icons";
+import { ChevronRightIcon, FolderIcon, MenuIcon, PlusIcon, SettingsIcon, SparklesIcon, UsersIcon, XIcon } from "./icons";
 
 export function Sidebar() {
   const { t } = useI18n();
   const pathname = usePathname();
-  const { user, isGuest, recent, configured } = useAuth();
+  const { user, isGuest, recent, configured, plan, usage, aiEnabled } = useAuth();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -85,6 +85,31 @@ export function Sidebar() {
       {recent.length === 0 && <div className="flex-1" />}
 
       <div className="mt-4 flex flex-col gap-2">
+        {aiEnabled && (
+          <Link
+            href="/pricing"
+            className={`block rounded-2xl p-3.5 ${plan === "pro" ? "bg-gradient-to-br from-brand-500 to-fuchsia-500 text-white" : "border border-brand-100 bg-gradient-to-br from-brand-50 to-fuchsia-50 hover:border-brand-200"}`}
+          >
+            <span className="flex items-center justify-between text-sm font-semibold">
+              <span className="flex items-center gap-1.5">
+                <SparklesIcon size={15} />
+                {plan === "pro" ? "Prefly Pro" : plan === "guest" ? t("plan.guest") : t("plan.free")}
+              </span>
+              {plan !== "pro" && <span className="text-xs font-semibold text-brand-600">{t("plan.upgrade")} →</span>}
+            </span>
+            {usage && (
+              <>
+                <span className={`mt-2.5 block h-1.5 overflow-hidden rounded-full ${plan === "pro" ? "bg-white/30" : "bg-white"}`}>
+                  <span
+                    className={`block h-full rounded-full ${plan === "pro" ? "bg-white" : "bg-gradient-to-r from-brand-500 to-fuchsia-500"}`}
+                    style={{ width: `${Math.min(100, (usage.used / Math.max(1, usage.limit)) * 100)}%` }}
+                  />
+                </span>
+                <span className={`mt-1.5 block text-xs ${plan === "pro" ? "text-white/85" : "text-ink-soft"}`}>{t("plan.usage", { used: usage.used, limit: usage.limit })}</span>
+              </>
+            )}
+          </Link>
+        )}
         <Link
           href="/settings"
           className={`flex items-center gap-3.5 rounded-2xl px-3 py-3 text-[0.95rem] transition ${
